@@ -8,7 +8,64 @@ The UI5 Web Components MCP Server improves the developer experience when working
 
 ## Requirements and Setup
 
-*Insert a short description what is required to get your project running...*
+See [Getting Started](https://ui5.github.io/webcomponents/docs/getting-started/first-steps/) on how to jumpstart your development and grow as you go with UI5 Web Components.
+
+## Installation
+
+```bash
+git clone https://github.com/UI5/webcomponents-mcp-server.git
+cd webcomponents-mcp-server
+npm install
+npm run build
+npm install -g .
+```
+
+## Usage
+
+Add to your MCP client config (e.g., `.vscode/mcp.json` for GitHub Copilot):
+
+```json
+{
+  "servers": {
+    "ui5-webc": {
+      "type": "stdio",
+      "command": "ui5-webc-mcp"
+    }
+  }
+}
+```
+
+Then ask your AI assistant:
+- "Show me the API for ui5-button"
+- "How do I use UI5 Web Components with React?"
+- "Show me the available documentation"
+- "Get the theming documentation"
+
+## Available Tools
+
+### `get_component_api`
+Fetch API docs for any UI5 Web Component (properties, slots, events, methods).  
+Searches across `@ui5/webcomponents`, `@ui5/webcomponents-fiori`, and `@ui5/webcomponents-ai` packages.
+
+### `get_guidelines`
+Get integration guides for React, Angular, or native JavaScript.  
+Includes installation, imports, and usage examples.
+
+### `list_docs`
+List all available UI5 Web Components documentation with summaries.
+
+### `get_doc`
+Fetch full content of specific documentation files.  
+
+## Development
+
+```bash
+npm run build         # Build TypeScript
+npm run dev           # Run locally
+npm run test          # Run tests
+npm run inspector     # Debug with MCP inspector
+npm run prepare:docs  # Fetch latest docs from GitHub
+```
 
 ## Support, Feedback, Contributing
 
