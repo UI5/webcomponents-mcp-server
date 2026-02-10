@@ -1,5 +1,5 @@
 {
-  "name": "ui5-webcomponents-mcp",
+  "name": "@ui5/webcomponents-mcp-server",
   "version": "0.0.1",
   "main": "index.js",
   "type": "module",
