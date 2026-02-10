@@ -21,7 +21,8 @@
     "test:watch": "ava --watch"
   },
   "files": [
-    "build"
+    "build",
+    "LICENSE"
   ],
   "keywords": [
     "ui5",
@@ -31,7 +32,7 @@
     "fiori"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "description": "Model Context Protocol server for UI5 Web Components development assistance",
   "devDependencies": {
     "@types/node": "^24.10.2",
