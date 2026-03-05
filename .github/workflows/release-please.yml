@@ -29,11 +29,11 @@ jobs:
       id-token: write # Required for trusted publishing via OIDC (https://docs.npmjs.com/trusted-publishers)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22.x
+          node-version: 24.x
           registry-url: 'https://registry.npmjs.org'
       - name: Install dependencies
         run: npm ci
@@ -56,3 +56,11 @@ jobs:
           mv package.json.bak package.json
       - name: Publish to npm
         run: npm publish --access public --provenance
+
+  publish-mcp-registry:
+    needs: [pull-request, publish-package]
+    if: ${{needs.pull-request.outputs.releases_created && toJson(fromJson(needs.pull-request.outputs.paths_released)) != '[]'}}
+    uses: ./.github/workflows/publish-mcp-registry.yml
+    permissions:
+      id-token: write # Required for login via github-oidc
+      contents: read

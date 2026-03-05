@@ -62,6 +62,13 @@
           "section": "Release",
           "hidden": true
         }
+      ],
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "server.json",
+          "jsonpath": "$..version"
+        }
       ]
     }
   }
