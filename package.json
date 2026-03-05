@@ -9,7 +9,6 @@
   },
   "scripts": {
     "prepare:docs": "node ./scripts/fetch_dir.js add https://github.com/UI5/webcomponents.git main ./docs",
-    "prepublishOnly": "npm run prepare:docs && npm run build",
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "clean": "rm -rf build",
     "dev": "npm run build && ./build/index.js",
