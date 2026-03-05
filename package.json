@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "ui5-webc-mcp": "./build/index.js"
+    "ui5-webc-mcp": "build/index.js"
   },
   "scripts": {
     "prepare:docs": "node ./scripts/fetch_dir.js add https://github.com/UI5/webcomponents.git main ./docs",
