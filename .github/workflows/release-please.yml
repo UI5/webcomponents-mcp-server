@@ -19,7 +19,7 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          token: ${{secrets.GH_OPENUI5BOT}}
+          token: ${{secrets.GITHUB_TOKEN}}
 
   publish-package:
     needs: pull-request
