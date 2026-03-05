@@ -2,6 +2,7 @@
   "name": "@ui5/webcomponents-mcp-server",
   "version": "0.0.1",
   "main": "index.js",
+  "mcpName": "io.github.UI5/webcomponents-mcp-server",
   "type": "module",
   "bin": {
     "ui5-webc-mcp": "build/index.js"
@@ -21,9 +22,17 @@
     "test:watch": "ava --watch"
   },
   "files": [
-    "build",
-    "LICENSE"
+    "build/**",
+    "LICENSE",
+    "LICENSES/**",
+    "npm-shrinkwrap.json",
+    ".reuse/**",
+    "resources/**"
   ],
+  "engines": {
+		"node": "^20.17.0 || >=22.9.0",
+		"npm": ">= 8"
+	},
   "keywords": [
     "ui5",
     "webcomponents",
@@ -31,6 +40,13 @@
     "sap",
     "fiori"
   ],
+  "repository": {
+		"type": "git",
+		"url": "git+https://github.com/UI5/webcomponents-mcp-server.git"
+	},
+	"bugs": {
+		"url": "https://github.com/UI5/webcomponents-mcp-server/issues"
+	},
   "author": "",
   "license": "Apache-2.0",
   "description": "Model Context Protocol server for UI5 Web Components development assistance",
