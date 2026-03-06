@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/UI5/webcomponents-mcp-server/compare/v0.1.1...v0.1.2) (2026-03-06)
+
+
+### Bug Fixes
+
+* **package:** include docs folder in published package ([#11](https://github.com/UI5/webcomponents-mcp-server/issues/11)) ([00f82b0](https://github.com/UI5/webcomponents-mcp-server/commit/00f82b0ee633a3e46ab85098ffee6594f96761ee))
+
 ## [0.1.1](https://github.com/UI5/webcomponents-mcp-server/compare/v0.1.0...v0.1.1) (2026-03-06)
 
 
