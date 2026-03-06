@@ -40,8 +40,8 @@ test('getDocTool normalizes paths', async (t) => {
 });
 
 test('getDocTool supports line ranges', async (t) => {
-  const result = await getDocTool.handler({ 
-    docs: [{ path: 'docs/09-FAQ.md', lines: '1-10' }] 
+  const result = await getDocTool.handler({
+    docs: [{ path: 'docs/09-FAQ.md', lines: '1-10' }],
   });
 
   t.is(result.content[0].type, 'text');
@@ -49,11 +49,8 @@ test('getDocTool supports line ranges', async (t) => {
 });
 
 test('getDocTool supports multiple documents', async (t) => {
-  const result = await getDocTool.handler({ 
-    docs: [
-      { path: 'docs/09-FAQ.md' },
-      { path: 'docs/08-Releases.md' }
-    ] 
+  const result = await getDocTool.handler({
+    docs: [{ path: 'docs/09-FAQ.md' }, { path: 'docs/08-Releases.md' }],
   });
 
   t.is(result.content[0].type, 'text');
@@ -61,3 +58,20 @@ test('getDocTool supports multiple documents', async (t) => {
   t.true(result.content[0].text.includes('docs/08-Releases.md'));
 });
 
+test('getDocTool blocks path traversal with ../', async (t) => {
+  const result = await getDocTool.handler({ docs: [{ path: '../../etc/passwd' }] });
+
+  t.true(result.content[0].text.includes('Access denied'));
+});
+
+test('getDocTool blocks path traversal to source code', async (t) => {
+  const result = await getDocTool.handler({ docs: [{ path: '../src/index.ts' }] });
+
+  t.true(result.content[0].text.includes('Access denied'));
+});
+
+test('getDocTool blocks path traversal with docs/ prefix', async (t) => {
+  const result = await getDocTool.handler({ docs: [{ path: 'docs/../../../etc/passwd' }] });
+
+  t.true(result.content[0].text.includes('Access denied'));
+});

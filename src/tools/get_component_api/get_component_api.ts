@@ -25,6 +25,12 @@ export const getComponentApiTool = {
   },
   handler: async ({ componentName, version = 'latest' }: GetComponentAPIToolPayload) => {
     try {
+      if (!/^[\da-zA-Z.\-]+$/.test(version)) {
+        return createTextResponse(
+          `Access denied: version "${version}" contains invalid characters. Use a semver string (e.g., "2.12.0") or "latest".`
+        );
+      }
+
       // transform any to kebab-case e.g avatar group (space) or
       // avatarGroup or AvatarGroup (camelCase) to avatar-group
       let normalizedName = componentName
