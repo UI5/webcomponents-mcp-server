@@ -1,4 +1,4 @@
-[![REUSE status](https://api.reuse.software/badge/github.com/UI5/ui5-web-components-mcp-server)](https://api.reuse.software/info/github.com/UI5/ui5-web-components-mcp-server)
+[![REUSE status](https://api.reuse.software/badge/github.com/UI5/webcomponents-mcp-server)](https://api.reuse.software/info/github.com/UI5/webcomponents-mcp-server)
 [![npm Package Version](https://badge.fury.io/js/%40ui5%2Fwebcomponents-mcp-server.svg)](https://www.npmjs.com/package/@ui5/webcomponents-mcp-server)
 
 # UI5 Web Components MCP Server
@@ -110,11 +110,11 @@ npm run prepare:docs  # Fetch latest docs from GitHub
 
 ## Support, Feedback, Contributing
 
-This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/UI5/ui5-web-components-mcp-server/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
+This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/UI5/webcomponents-mcp-server/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
 
 ## Security / Disclosure
 
-If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/UI5/ui5-web-components-mcp-server/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
+If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/UI5/webcomponents-mcp-server/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
 
 ## Code of Conduct
 
@@ -122,4 +122,4 @@ We as members, contributors, and leaders pledge to make participation in our com
 
 ## Licensing
 
-Copyright 2025 SAP SE or an SAP affiliate company and ui5-web-components-mcp-server contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/UI5/ui5-web-components-mcp-server).
+Copyright 2025 SAP SE or an SAP affiliate company and ui5-web-components-mcp-server contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/UI5/webcomponents-mcp-server).
