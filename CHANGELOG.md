@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/UI5/webcomponents-mcp-server/compare/v0.1.2...v0.1.3) (2026-03-16)
+
+
+### Bug Fixes
+
+* correct repository URLs for REUSE tool compliance ([#14](https://github.com/UI5/webcomponents-mcp-server/issues/14)) ([918252a](https://github.com/UI5/webcomponents-mcp-server/commit/918252a5ce5a3f8a3bade7717ee62247bcd9476a)), closes [#13](https://github.com/UI5/webcomponents-mcp-server/issues/13)
+
 ## [0.1.2](https://github.com/UI5/webcomponents-mcp-server/compare/v0.1.1...v0.1.2) (2026-03-06)
 
 
