@@ -2,15 +2,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import anyTest, { TestFn } from 'ava';
 
-import { mountUpstream, UPSTREAMS } from '../src/upstreams/index.js';
-import { _resetForTesting } from '../src/upstreams/mount.js';
+import { mountUpstream, mountUpstreams, UPSTREAMS } from '../src/upstreams/index.js';
+import { _resetForTesting } from '../src/upstreams/index.js';
 
 const test = anyTest as TestFn;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MOCK_BIN = path.join(__dirname, 'fixtures', 'mock_upstream.mjs');
+const MOCK_EMPTY_BIN = path.join(__dirname, 'fixtures', 'mock_empty_upstream.mjs');
 
 test.beforeEach(() => {
   _resetForTesting();
@@ -21,6 +24,8 @@ test.beforeEach(() => {
  *   - Tools register under `<prefix>_<originalName>` and forward.
  *   - Resources register with their upstream URI verbatim and forward.
  *   - Prompts register under `<prefix>_<originalName>` and forward.
+ *   - The richer `format` tool's input schema (enum / integer / array / optional) survives the
+ *     JSON-Schema → Zod conversion and a call through it returns the upstream's response.
  *
  * Serial: tests share module-scoped resourceOwners and spawn children — keep teardown
  * deterministic.
@@ -38,7 +43,7 @@ test.serial('mountUpstream namespaces and forwards tools, resources, and prompts
   );
 
   try {
-    t.deepEqual(handle.toolNames, ['mock_echo']);
+    t.deepEqual(handle.toolNames.sort(), ['mock_echo', 'mock_format']);
     t.deepEqual(handle.resourceUris, ['mock://doc']);
     t.deepEqual(handle.promptNames, ['mock_greet']);
 
@@ -51,6 +56,16 @@ test.serial('mountUpstream namespaces and forwards tools, resources, and prompts
     const toolContent = (toolResult.content as Array<{ type: string; text?: string }>)?.[0];
     t.is(toolContent?.type, 'text');
     t.is(toolContent?.text, 'echo: hi');
+
+    // Richer-schema tool: enum + integer + array + optional. Doesn't supply `verbose`, which
+    // the upstream defaults to false. We assert the upstream's default applied (proving the
+    // parent did NOT also apply a default and short-circuit the upstream).
+    const richResult = await handle.client.callTool({
+      name: 'format',
+      arguments: { style: 'short', count: 3, tags: ['a', 'b'] },
+    });
+    const richContent = (richResult.content as Array<{ type: string; text?: string }>)?.[0];
+    t.is(richContent?.text, 'style=short count=3 tags=[a,b] verbose=false');
 
     const readResult = await handle.client.readResource({ uri: 'mock://doc' });
     const resourceContent = (readResult.contents as Array<{ text?: string }>)?.[0];
@@ -66,6 +81,98 @@ test.serial('mountUpstream namespaces and forwards tools, resources, and prompts
   } finally {
     await handle.transport.close();
   }
+});
+
+/**
+ * Verifies a tool call routed through the parent McpServer (rather than calling the child
+ * client directly) actually reaches the upstream and returns its result. This protects against
+ * regressions in the registerTool wiring — the previous test exercises the client; this one
+ * exercises the full parent → registered handler → child path.
+ */
+test.serial('mounted tool is callable through the parent server', async (t) => {
+  const server = new McpServer(
+    { name: 'host', version: '0' },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } }
+  );
+
+  const handle = await mountUpstream(
+    server,
+    { prefix: 'mock', label: 'Mock Upstream', packageName: 'unused' },
+    { binPath: MOCK_BIN, onUpstreamExit: () => {} }
+  );
+
+  // Connect a Client over an in-memory transport pair so we can invoke the parent the same
+  // way an MCP client would.
+  const client = new Client({ name: 'test-client', version: '0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+  try {
+    // tools/list against the parent should include the mounted name (no namespace stripping).
+    const list = await client.listTools();
+    const names = list.tools.map((t) => t.name);
+    t.true(names.includes('mock_echo'), `mock_echo missing from parent: ${names.join(', ')}`);
+
+    const result = await client.callTool({
+      name: 'mock_echo',
+      arguments: { message: 'through-parent' },
+    });
+    const content = (result.content as Array<{ type: string; text?: string }>)?.[0];
+    t.is(content?.text, 'echo: through-parent');
+  } finally {
+    await client.close();
+    await server.close();
+    await handle.transport.close();
+  }
+});
+
+/**
+ * An upstream advertising no capabilities must not blow up — listTools/listResources/listPrompts
+ * are all gated on the corresponding capability, so all three lists should come back empty.
+ */
+test.serial(
+  'mountUpstream against an upstream with no capabilities yields empty lists',
+  async (t) => {
+    const server = new McpServer(
+      { name: 'host', version: '0' },
+      { capabilities: { tools: {}, resources: {}, prompts: {} } }
+    );
+
+    const handle = await mountUpstream(
+      server,
+      { prefix: 'empty', label: 'Empty Upstream', packageName: 'unused' },
+      { binPath: MOCK_EMPTY_BIN, onUpstreamExit: () => {} }
+    );
+
+    try {
+      t.deepEqual(handle.toolNames, []);
+      t.deepEqual(handle.resourceUris, []);
+      t.deepEqual(handle.promptNames, []);
+    } finally {
+      await handle.transport.close();
+    }
+  }
+);
+
+/**
+ * mountUpstreams' duplicate-prefix guard must reject configs that share a prefix BEFORE any
+ * child is spawned, so a typo in the registry never produces a non-deterministically-routed
+ * server.
+ */
+test.serial('mountUpstreams throws on duplicate prefixes in the registry', async (t) => {
+  const server = new McpServer(
+    { name: 'host', version: '0' },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } }
+  );
+
+  await t.throwsAsync(
+    () =>
+      mountUpstreams(server, [
+        { prefix: 'dup', label: 'A', packageName: 'unused' },
+        { prefix: 'dup', label: 'B', packageName: 'unused' },
+      ]),
+    { message: /Duplicate upstream prefix "dup"/ }
+  );
 });
 
 /**

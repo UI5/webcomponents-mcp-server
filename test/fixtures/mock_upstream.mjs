@@ -2,7 +2,9 @@
  * Mock upstream MCP server used by upstreams.test.ts.
  *
  * Registers one of each: tool, resource, prompt — so the mount layer's three forwarding paths
- * are all exercised. Designed to run as `node mock_upstream.mjs`.
+ * are all exercised. Also registers a second tool with a richer input schema (enum, integer,
+ * array, optional-with-default) so the JSON-Schema → Zod converter is covered end-to-end.
+ * Designed to run as `node mock_upstream.mjs`.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -21,6 +23,30 @@ server.registerTool(
   },
   async ({ message }) => ({
     content: [{ type: 'text', text: `echo: ${message}` }],
+  })
+);
+
+// Second tool: schema exercises enum, integer, array-of-string, and an optional with default.
+// The mount layer should still register it and the upstream remains the source of truth for
+// validation (defaults are intentionally NOT carried into the parent's Zod shape).
+server.registerTool(
+  'format',
+  {
+    description: 'Formats inputs in a chosen style',
+    inputSchema: {
+      style: z.enum(['short', 'long']),
+      count: z.number().int(),
+      tags: z.array(z.string()),
+      verbose: z.boolean().optional().default(false),
+    },
+  },
+  async ({ style, count, tags, verbose }) => ({
+    content: [
+      {
+        type: 'text',
+        text: `style=${style} count=${count} tags=[${tags.join(',')}] verbose=${verbose}`,
+      },
+    ],
   })
 );
 
@@ -48,5 +74,10 @@ server.registerPrompt(
     ],
   })
 );
+
+// Cleaner Ctrl-C / supervised teardown when a test hangs and the harness sends SIGTERM.
+// stdio EOF still works without this; this just makes manual debugging less surprising.
+process.on('SIGTERM', () => process.exit(0));
+process.on('SIGINT', () => process.exit(0));
 
 await server.connect(new StdioServerTransport());

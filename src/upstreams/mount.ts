@@ -25,6 +25,23 @@ export interface UpstreamHandle {
 const resourceOwners = new Map<string, UpstreamSpec>();
 let shuttingDown = false;
 
+/**
+ * Own version, read once from this package's package.json. Forwarded to upstream MCP servers as
+ * the connecting client's version so their logs are useful when debugging which parent
+ * connected. Falls back to '0.0.0' if the lookup fails for any reason — non-fatal.
+ */
+const OWN_VERSION = readOwnVersion();
+function readOwnVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    // The compiled artifact lives at build/upstreams/mount.js, so the package.json is two levels up.
+    const pkg = require('../../package.json') as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 /** Called from the entrypoint's shutdown handler before closing transports. */
 export function markShutdown(): void {
   shuttingDown = true;
@@ -46,12 +63,19 @@ export function _resetForTesting(): void {
  * them on `server` under namespaced names (resources keep their original URI; collisions throw).
  *
  * Throws on any failure — the caller is expected to log and exit non-zero.
+ *
+ * The optional `upstreams` parameter exists for tests; production callers pass nothing and the
+ * module-level `UPSTREAMS` list is used.
  */
-export async function mountUpstreams(server: McpServer): Promise<UpstreamHandle[]> {
+export async function mountUpstreams(
+  server: McpServer,
+  upstreams: ReadonlyArray<UpstreamSpec> = UPSTREAMS
+): Promise<UpstreamHandle[]> {
   // Cheap insurance against typos in the registry: two upstreams sharing a prefix would silently
-  // collide on every same-named tool/prompt and behave non-deterministically. Detect at startup.
+  // collide on every same-named tool/prompt and behave non-deterministically. Detect at startup
+  // so the failure mode is "server fails to boot with a clear error", not "calls misroute".
   const seenPrefixes = new Set<string>();
-  for (const spec of UPSTREAMS) {
+  for (const spec of upstreams) {
     if (seenPrefixes.has(spec.prefix)) {
       throw new Error(
         `Duplicate upstream prefix "${spec.prefix}" in registry — prefixes must be unique.`
@@ -61,7 +85,7 @@ export async function mountUpstreams(server: McpServer): Promise<UpstreamHandle[
   }
 
   const handles: UpstreamHandle[] = [];
-  for (const spec of UPSTREAMS) {
+  for (const spec of upstreams) {
     handles.push(await mountUpstream(server, spec));
   }
   return handles;
@@ -104,13 +128,20 @@ export async function mountUpstream(
   });
 
   const client = new Client(
-    { name: 'ui5-webcomponents-mcp-server', version: '0.0.0' },
+    { name: 'ui5-webcomponents-mcp-server', version: OWN_VERSION },
     { capabilities: {} }
   );
 
   try {
     await client.connect(transport);
   } catch (error) {
+    // Symmetric with the post-connect failure path: the spawned child must not leak even when
+    // the very first handshake fails.
+    try {
+      await transport.close();
+    } catch {
+      /* best-effort */
+    }
     throw new Error(`[${spec.label}] failed to connect: ${stringifyError(error)}`);
   }
 
@@ -160,6 +191,12 @@ async function registerUpstream(
   if (upstreamCaps.tools) {
     const { tools } = await client.listTools();
     for (const tool of tools) {
+      // Naming: `<spec.prefix>_<tool.name>`. Note that an upstream may already namespace its own
+      // tools (e.g. the React MCP exports tools like `react_get_component_api`) so the user can
+      // see double-prefixed names like `react_react_get_component_api`. That's deliberate here:
+      // we don't strip a leading `<prefix>_` from the upstream's name because doing so risks
+      // collision when a future upstream genuinely exports an unprefixed tool with the same
+      // basename. A follow-up may revisit this with explicit registry-level guidance.
       const mountedName = `${spec.prefix}_${tool.name}`;
       const inputShape = jsonObjectSchemaToZodShape(tool.inputSchema);
       const config: {
@@ -171,8 +208,11 @@ async function registerUpstream(
         annotations: tool.annotations,
       };
       if (inputShape) config.inputSchema = inputShape;
-      // Handler signature differs based on whether inputSchema is set; cast through `unknown`
-      // since the upstream server is the actual validator.
+      // The SDK overloads `registerTool` so its handler-arg type depends on whether inputSchema
+      // is supplied. We're populating that field dynamically based on what the upstream returns,
+      // so TS can't pick the right overload at compile time. Casting through `unknown` is the
+      // narrowest workaround until the SDK exposes a less-overloaded variant; the upstream is
+      // the actual validator regardless.
       server.registerTool(
         mountedName,
         config as Parameters<McpServer['registerTool']>[1],
@@ -287,13 +327,22 @@ function resolveUpstreamBin(spec: UpstreamSpec): string {
 
 /**
  * Convert an MCP tool's JSON Schema (always `type: object` per spec) into the raw-shape form
- * (Record<string, ZodTypeAny>) that `McpServer.registerTool` expects. Returns undefined if the
- * schema has no properties — `registerTool` is fine omitting `inputSchema` in that case.
+ * (Record<string, ZodTypeAny>) that `McpServer.registerTool` expects.
+ *
+ * Returns undefined when there's no useful per-property shape to register: either the schema is
+ * not an object schema, or its properties are empty/absent. In that case the caller omits
+ * `inputSchema` and the SDK skips parent-side validation entirely — args are forwarded as-is to
+ * the upstream, which is the source of truth. This handles `type: object` schemas with no
+ * declared properties (e.g. tools that accept free-form keys) without rejecting calls.
  *
  * This is intentionally limited to the JSON Schema constructs MCP tool inputs actually use in
- * practice: primitive types (string/number/integer/boolean), enum, default, description, and
- * required. Nested objects and combinators (oneOf/anyOf/allOf) fall back to z.any() — the
+ * practice: primitive types (string/number/integer/boolean), enum, description, required, and
+ * arrays. Nested objects and combinators (oneOf/anyOf/allOf) fall back to z.any() — the
  * upstream still validates the call, so this is safe.
+ *
+ * Defaults (`default:`) are intentionally NOT carried into the parent's Zod shape. The upstream
+ * is the single source of truth for validation and default-application; applying defaults twice
+ * could mask cases where `undefined` is meaningful to the upstream tool.
  */
 function jsonObjectSchemaToZodShape(schema: unknown): Record<string, ZodTypeAny> | undefined {
   if (!schema || typeof schema !== 'object') return undefined;
@@ -320,7 +369,6 @@ function jsonValueSchemaToZod(schema: unknown): ZodTypeAny {
     type?: string;
     enum?: unknown[];
     description?: string;
-    default?: unknown;
     items?: unknown;
   };
 
@@ -358,7 +406,9 @@ function jsonValueSchemaToZod(schema: unknown): ZodTypeAny {
   }
 
   if (s.description) zodSchema = zodSchema.describe(s.description);
-  if (s.default !== undefined) zodSchema = zodSchema.default(s.default as never);
+  // Defaults are intentionally not applied here — the upstream is the source of truth and
+  // applies them itself. Carrying them through would apply defaults twice and could mask
+  // cases where `undefined` is meaningful to the upstream tool.
   return zodSchema;
 }
 

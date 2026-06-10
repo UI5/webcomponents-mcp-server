@@ -47,7 +47,11 @@ process.on('SIGTERM', () => {
   shutdown();
   process.exit(0);
 });
-process.on('exit', shutdown);
+// We deliberately do NOT register a 'exit' handler: 'exit' runs synchronously and ignores
+// returned promises, so transport.close() couldn't reliably finish IPC teardown there. For
+// stdio child processes the parent's exit closes their stdin and they receive SIGPIPE on
+// the next write — that is sufficient cleanup. SIGINT/SIGTERM cover ctrl-C and supervised
+// teardown explicitly.
 
 async function main(): Promise<void> {
   // Spawn and mount upstream framework MCPs (React today; Angular/Vue future). Any failure here
