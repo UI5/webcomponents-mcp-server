@@ -1,26 +1,62 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import * as tools from "./tools/index.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
-const server = new McpServer({
-  name: "ui5-webcomponents",
-  version: "0.0.1",
-});
+import * as tools from './tools/index.js';
+import { markShutdown, mountUpstreams, UpstreamHandle } from './upstreams/index.js';
 
-// Register tools
+const server = new McpServer(
+  {
+    name: 'ui5-webcomponents',
+    version: '0.0.1',
+  },
+  {
+    // Declared unconditionally: any combination of native + mounted upstream items can fill
+    // these. An empty list/read response is fine when nothing is registered for a slot.
+    capabilities: { tools: {}, resources: {}, prompts: {} },
+  }
+);
+
+// Register native tools (Zod-shape inputs).
 Object.values(tools).forEach(tool => {
   server.tool(tool.name, tool.description, tool.inputSchema, tool.handler);
 });
 
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("UI5 Web Components MCP Server running on stdio");
+let handles: UpstreamHandle[] = [];
+
+function shutdown(): void {
+  markShutdown();
+  for (const h of handles) {
+    try {
+      h.transport.close();
+    } catch {
+      /* best-effort during shutdown */
+    }
+  }
 }
 
-main().catch((error) => {
-  console.error("Fatal error in main():", error);
+process.on('SIGINT', () => {
+  shutdown();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  shutdown();
+  process.exit(0);
+});
+process.on('exit', shutdown);
+
+async function main(): Promise<void> {
+  // Spawn and mount upstream framework MCPs (React today; Angular/Vue future). Any failure here
+  // is fatal — better the user sees a clear error than a half-mounted server.
+  handles = await mountUpstreams(server);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error('UI5 Web Components MCP Server running on stdio');
+}
+
+main().catch(error => {
+  console.error('Fatal error in main():', error);
   process.exit(1);
 });

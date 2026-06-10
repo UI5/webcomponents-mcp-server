@@ -5,3 +5,7 @@ docs/*
 !docs/.gitkeep
 AGENTS.md
 .tsimp/
+
+# A/B harness output (results, generated reports, scaffolds, browser caches).
+# The harness scripts under scripts/ab-* write everything below .ab/.
+.ab/
