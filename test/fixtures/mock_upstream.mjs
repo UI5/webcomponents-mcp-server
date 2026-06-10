@@ -1,7 +1,7 @@
 /**
  * Mock upstream MCP server used by upstreams.test.ts.
  *
- * Registers one of each: tool, resource, prompt — so the mount layer's three forwarding paths
+ * Registers one of each: tool, resource, prompt - so the mount layer's three forwarding paths
  * are all exercised. Also registers a second tool with a richer input schema (enum, integer,
  * array, optional-with-default) so the JSON-Schema → Zod converter is covered end-to-end.
  * Designed to run as `node mock_upstream.mjs`.

@@ -27,7 +27,7 @@ test.beforeEach(() => {
  *   - The richer `format` tool's input schema (enum / integer / array / optional) survives the
  *     JSON-Schema → Zod conversion and a call through it returns the upstream's response.
  *
- * Serial: tests share module-scoped resourceOwners and spawn children — keep teardown
+ * Serial: tests share module-scoped resourceOwners and spawn children - keep teardown
  * deterministic.
  */
 test.serial('mountUpstream namespaces and forwards tools, resources, and prompts', async (t) => {
@@ -47,7 +47,7 @@ test.serial('mountUpstream namespaces and forwards tools, resources, and prompts
     t.deepEqual(handle.resourceUris, ['mock://doc']);
     t.deepEqual(handle.promptNames, ['mock_greet']);
 
-    // Forward a tool call through the upstream client — this exercises the same path the
+    // Forward a tool call through the upstream client - this exercises the same path the
     // mounted handler uses (server.registerTool's callback delegates to it).
     const toolResult = await handle.client.callTool({
       name: 'echo',
@@ -86,7 +86,7 @@ test.serial('mountUpstream namespaces and forwards tools, resources, and prompts
 /**
  * Verifies a tool call routed through the parent McpServer (rather than calling the child
  * client directly) actually reaches the upstream and returns its result. This protects against
- * regressions in the registerTool wiring — the previous test exercises the client; this one
+ * regressions in the registerTool wiring - the previous test exercises the client; this one
  * exercises the full parent → registered handler → child path.
  */
 test.serial('mounted tool is callable through the parent server', async (t) => {
@@ -127,7 +127,7 @@ test.serial('mounted tool is callable through the parent server', async (t) => {
 });
 
 /**
- * An upstream advertising no capabilities must not blow up — listTools/listResources/listPrompts
+ * An upstream advertising no capabilities must not blow up - listTools/listResources/listPrompts
  * are all gated on the corresponding capability, so all three lists should come back empty.
  */
 test.serial(
@@ -177,7 +177,7 @@ test.serial('mountUpstreams throws on duplicate prefixes in the registry', async
 
 /**
  * Mounts the real React MCP via the registry and asserts its expected tools and resources show
- * up. We don't call its tools — that's the React team's contract — only that the mount plumbing
+ * up. We don't call its tools - that's the React team's contract - only that the mount plumbing
  * sees them.
  */
 test.serial(
@@ -228,7 +228,7 @@ test.serial('mountUpstream throws on resource URI collision across upstreams', a
     { binPath: MOCK_BIN, onUpstreamExit: () => {} }
   );
 
-  // Second mount of the same fixture would re-register `mock://doc` — must throw.
+  // Second mount of the same fixture would re-register `mock://doc` - must throw.
   await t.throwsAsync(
     () =>
       mountUpstream(

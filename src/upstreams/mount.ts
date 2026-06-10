@@ -9,7 +9,7 @@ import { logger } from '../logger.js';
 import { UPSTREAMS, UpstreamSpec } from './registry.js';
 
 /**
- * One mounted upstream — the live Client/Transport pair plus what we registered from it.
+ * One mounted upstream - the live Client/Transport pair plus what we registered from it.
  * Returned to the entrypoint so it can close transports on shutdown.
  */
 export interface UpstreamHandle {
@@ -28,7 +28,7 @@ let shuttingDown = false;
 /**
  * Own version, read once from this package's package.json. Forwarded to upstream MCP servers as
  * the connecting client's version so their logs are useful when debugging which parent
- * connected. Falls back to '0.0.0' if the lookup fails for any reason — non-fatal.
+ * connected. Falls back to '0.0.0' if the lookup fails for any reason - non-fatal.
  */
 const OWN_VERSION = readOwnVersion();
 function readOwnVersion(): string {
@@ -50,7 +50,7 @@ export function markShutdown(): void {
 /**
  * Test-only: reset module state so successive `mountUpstream` calls in tests are independent.
  *
- * Callers must also construct a fresh `McpServer` for each mount — this only resets the
+ * Callers must also construct a fresh `McpServer` for each mount - this only resets the
  * module-scoped registry/flags, not anything already registered on a server instance.
  */
 export function _resetForTesting(): void {
@@ -62,7 +62,7 @@ export function _resetForTesting(): void {
  * Spawn each registered upstream MCP server, list its tools/resources/prompts, and re-publish
  * them on `server` under namespaced names (resources keep their original URI; collisions throw).
  *
- * Throws on any failure — the caller is expected to log and exit non-zero.
+ * Throws on any failure - the caller is expected to log and exit non-zero.
  *
  * The optional `upstreams` parameter exists for tests; production callers pass nothing and the
  * module-level `UPSTREAMS` list is used.
@@ -78,7 +78,7 @@ export async function mountUpstreams(
   for (const spec of upstreams) {
     if (seenPrefixes.has(spec.prefix)) {
       throw new Error(
-        `Duplicate upstream prefix "${spec.prefix}" in registry — prefixes must be unique.`
+        `Duplicate upstream prefix "${spec.prefix}" in registry - prefixes must be unique.`
       );
     }
     seenPrefixes.add(spec.prefix);
@@ -91,7 +91,7 @@ export async function mountUpstreams(
   return handles;
 }
 
-/** Options accepted by mountUpstream — used by tests to override defaults. */
+/** Options accepted by mountUpstream - used by tests to override defaults. */
 export interface MountOptions {
   /** Override bin resolution. Used by tests pointing at a fixture script. */
   binPath?: string;
@@ -155,7 +155,7 @@ export async function mountUpstream(
     });
   }
 
-  // Runtime fail-fast hook — overridable for tests.
+  // Runtime fail-fast hook - overridable for tests.
   transport.onclose = () => onExit(spec, 'close');
   transport.onerror = (err) => onExit(spec, err);
 
@@ -180,7 +180,7 @@ async function registerUpstream(
   client: Client,
   transport: StdioClientTransport
 ): Promise<UpstreamHandle> {
-  // We only call list* for capabilities the upstream advertises — calling tools/list against
+  // We only call list* for capabilities the upstream advertises - calling tools/list against
   // a server without `tools` capability would return -32601 Method not found.
   const upstreamCaps = client.getServerCapabilities() ?? {};
 
@@ -246,7 +246,7 @@ async function registerUpstream(
           title: resource.title,
         },
         async (uri) => {
-          // Forward verbatim — the upstream is the source of truth for the
+          // Forward verbatim - the upstream is the source of truth for the
           // ReadResourceResult shape (`{ contents: [...] }`); if it's
           // schema-violating the parent's framework will throw at response time,
           // matching the same trust model as tool/prompt forwarding.
@@ -302,7 +302,7 @@ function resolveUpstreamBin(spec: UpstreamSpec): string {
     pkgJsonPath = require.resolve(`${spec.packageName}/package.json`);
   } catch (error) {
     throw new Error(
-      `[${spec.label}] cannot resolve package "${spec.packageName}" — is it installed? (${stringifyError(error)})`
+      `[${spec.label}] cannot resolve package "${spec.packageName}" - is it installed? (${stringifyError(error)})`
     );
   }
 
@@ -312,7 +312,7 @@ function resolveUpstreamBin(spec: UpstreamSpec): string {
   if (typeof binField === 'string') {
     binRel = binField;
   } else if (binField && typeof binField === 'object') {
-    // Prefer the bin entry whose name matches the package basename — that's the convention
+    // Prefer the bin entry whose name matches the package basename - that's the convention
     // for npm packages that ship multiple binaries (one of which is the "main" tool).
     const basename = spec.packageName.split('/').pop() ?? spec.packageName;
     binRel = binField[basename] ?? Object.values(binField)[0];
@@ -331,13 +331,13 @@ function resolveUpstreamBin(spec: UpstreamSpec): string {
  *
  * Returns undefined when there's no useful per-property shape to register: either the schema is
  * not an object schema, or its properties are empty/absent. In that case the caller omits
- * `inputSchema` and the SDK skips parent-side validation entirely — args are forwarded as-is to
+ * `inputSchema` and the SDK skips parent-side validation entirely - args are forwarded as-is to
  * the upstream, which is the source of truth. This handles `type: object` schemas with no
  * declared properties (e.g. tools that accept free-form keys) without rejecting calls.
  *
  * This is intentionally limited to the JSON Schema constructs MCP tool inputs actually use in
  * practice: primitive types (string/number/integer/boolean), enum, description, required, and
- * arrays. Nested objects and combinators (oneOf/anyOf/allOf) fall back to z.any() — the
+ * arrays. Nested objects and combinators (oneOf/anyOf/allOf) fall back to z.any() - the
  * upstream still validates the call, so this is safe.
  *
  * Defaults (`default:`) are intentionally NOT carried into the parent's Zod shape. The upstream
@@ -376,7 +376,7 @@ function jsonValueSchemaToZod(schema: unknown): ZodTypeAny {
 
   if (Array.isArray(s.enum) && s.enum.length > 0) {
     // Zod's z.enum requires string literals; enum values may be numbers/booleans, so we
-    // build z.literal()s and union them. z.union requires at least 2 members — for a
+    // build z.literal()s and union them. z.union requires at least 2 members - for a
     // single-value enum, return the literal directly. The double cast is needed because
     // TS can't statically prove `literals` has 2+ elements at this point.
     const literals = s.enum.map((v) => z.literal(v as string | number | boolean));
@@ -400,13 +400,13 @@ function jsonValueSchemaToZod(schema: unknown): ZodTypeAny {
         zodSchema = z.array(s.items ? jsonValueSchemaToZod(s.items) : z.any());
         break;
       default:
-        // Object subschemas, oneOf/anyOf, etc. — pass through; upstream re-validates.
+        // Object subschemas, oneOf/anyOf, etc. - pass through; upstream re-validates.
         zodSchema = z.any();
     }
   }
 
   if (s.description) zodSchema = zodSchema.describe(s.description);
-  // Defaults are intentionally not applied here — the upstream is the source of truth and
+  // Defaults are intentionally not applied here - the upstream is the source of truth and
   // applies them itself. Carrying them through would apply defaults twice and could mask
   // cases where `undefined` is meaningful to the upstream tool.
   return zodSchema;
@@ -418,7 +418,7 @@ function jsonValueSchemaToZod(schema: unknown): ZodTypeAny {
  * are required, others are optional.
  *
  * Note: per the MCP spec (https://spec.modelcontextprotocol.io), prompt arguments are always
- * strings — there is no typed-prompt-arg construct. Don't extend this to other Zod types.
+ * strings - there is no typed-prompt-arg construct. Don't extend this to other Zod types.
  */
 function promptArgsToZodShape(
   args: Array<{ name: string; description?: string; required?: boolean }> | undefined

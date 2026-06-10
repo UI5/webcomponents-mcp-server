@@ -1,5 +1,5 @@
 /**
- * Mock upstream MCP server with no advertised capabilities — used to verify the mount layer
+ * Mock upstream MCP server with no advertised capabilities - used to verify the mount layer
  * gracefully short-circuits when the upstream advertises nothing rather than calling tools/list
  * or resources/list (which would return -32601 Method not found on a server without that
  * capability).
