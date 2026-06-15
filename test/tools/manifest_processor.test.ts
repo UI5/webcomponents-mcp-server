@@ -1,4 +1,5 @@
 import anyTest, { TestFn } from 'ava';
+import nock from 'nock';
 import {
   formatComponentAPI,
   findComponentInManifest,
@@ -204,11 +205,9 @@ test('fetchCustomElementsManifest returns null if no customElements field', asyn
 
 test('fetchCustomElementsManifest fetches manifest successfully', async (t) => {
   const mockManifestResponse = { modules: [] };
-  global.fetch = async () =>
-    ({
-      ok: true,
-      json: async () => mockManifestResponse,
-    }) as Response;
+  nock('https://unpkg.com')
+    .get('/@ui5/webcomponents@2.0.0/dist/custom-elements.json')
+    .reply(200, mockManifestResponse);
 
   const packageData: NpmPackageData = {
     name: '@ui5/webcomponents',
@@ -221,11 +220,9 @@ test('fetchCustomElementsManifest fetches manifest successfully', async (t) => {
 });
 
 test('fetchCustomElementsManifest handles fetch errors', async (t) => {
-  global.fetch = async () =>
-    ({
-      ok: false,
-      status: 404,
-    }) as Response;
+  nock('https://unpkg.com')
+    .get('/@ui5/webcomponents@2.0.0/dist/custom-elements.json')
+    .reply(404);
 
   const packageData: NpmPackageData = {
     name: '@ui5/webcomponents',
@@ -238,9 +235,9 @@ test('fetchCustomElementsManifest handles fetch errors', async (t) => {
 });
 
 test('fetchCustomElementsManifest handles network errors', async (t) => {
-  global.fetch = async () => {
-    throw new Error('Network error');
-  };
+  nock('https://unpkg.com')
+    .get('/@ui5/webcomponents@2.0.0/dist/custom-elements.json')
+    .replyWithError('Network error');
 
   const packageData: NpmPackageData = {
     name: '@ui5/webcomponents',
