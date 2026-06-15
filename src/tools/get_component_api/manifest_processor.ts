@@ -1,5 +1,5 @@
 import { CustomElementsManifest, NpmPackageData, type ComponentData } from '../../types.js';
-import { USER_AGENT, NPM_REGISTRY_BASE, UNPKG_BASE, makeNpmRequest, getProxyAgent } from '../../utils.js';
+import { USER_AGENT, NPM_REGISTRY_BASE, UNPKG_BASE, makeNpmRequest, proxyFetch } from '../../utils.js';
 import { logger } from '../../logger.js';
 
 // UI5 Web Components packages ordered by priority
@@ -18,11 +18,9 @@ export async function fetchCustomElementsManifest(
     const customElementsPath = packageData.customElements.replace('./', '');
     const manifestUrl = `${UNPKG_BASE}/${packageData.name}@${packageData.version}/${customElementsPath}`;
 
-    const dispatcher = getProxyAgent();
-    const response = await fetch(manifestUrl, {
+    const response = await proxyFetch(manifestUrl, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-      dispatcher,
-    } as RequestInit);
+    });
 
     if (!response.ok) return null;
     return (await response.json()) as CustomElementsManifest;

@@ -56,14 +56,16 @@
     "@typescript-eslint/parser": "^8.15.0",
     "ava": "^6.4.1",
     "eslint": "^9.15.0",
+    "nock": "^14.0.15",
     "prettier": "^3.3.3",
     "tsx": "^4.20.6",
     "typescript": "^5.7.2",
-    "undici": "^8.4.1",
     "vite-node": "^3.2.4"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
+    "https-proxy-agent": "^9.1.0",
+    "node-fetch": "^3.3.2",
     "zod": "^3.25.76"
   }
 }
