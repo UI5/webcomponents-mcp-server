@@ -74,3 +74,23 @@ export interface NpmPackageData {
         tarball: string;
     };
 }
+
+export interface ChangelogEntry {
+    component: string;
+    description: string;
+}
+
+export interface VersionSection {
+    version: string;
+    date: string;
+    breakingChanges: ChangelogEntry[];
+    features: ChangelogEntry[];
+    bugFixes: ChangelogEntry[];
+}
+
+export interface UpgradeGuidance {
+    fromVersion: string;
+    toVersion: string;
+    sections: VersionSection[];
+    hasBreakingChanges: boolean;
+}
