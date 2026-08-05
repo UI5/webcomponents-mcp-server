@@ -1,4 +1,12 @@
-import { CustomElementsManifest, NpmPackageData, type ComponentData } from '../../types.js';
+import {
+  CustomElementsManifest,
+  NpmPackageData,
+  type ComponentAttribute,
+  type ComponentData,
+  type ComponentEvent,
+  type ComponentMember,
+  type ComponentSlot,
+} from '../../types.js';
 import { USER_AGENT, NPM_REGISTRY_BASE, UNPKG_BASE, makeNpmRequest } from '../../utils.js';
 import { logger } from '../../logger.js';
 
@@ -8,6 +16,10 @@ export const UI5_PACKAGES = [
   '@ui5/webcomponents-fiori',
   '@ui5/webcomponents-ai',
 ];
+
+export interface FormatOptions {
+  hideDeprecated?: boolean;
+}
 
 export async function fetchCustomElementsManifest(
   packageData: NpmPackageData
@@ -73,6 +85,8 @@ export function findComponentInManifest(
         name: declaration.name || componentName,
         tagName: declaration.tagName || componentName,
         description: declaration.description || `The ${componentName} component.`,
+        deprecated: declaration.deprecated,
+        _ui5experimental: declaration._ui5experimental,
         attributes: declaration.attributes || [],
         slots: declaration.slots || [],
         events: declaration.events || [],
@@ -84,48 +98,109 @@ export function findComponentInManifest(
   return null;
 }
 
+// Build the "⚠ DEPRECATED" / "🧪 EXPERIMENTAL" markers for a member. Returns an
+// array of markdown lines to insert after the member heading. Empty when the
+// member carries no flags.
+function stabilityMarkers(item: {
+  deprecated?: string | boolean;
+  _ui5experimental?: string | boolean;
+}): string[] {
+  const lines: string[] = [];
+
+  if (item.deprecated !== undefined && item.deprecated !== false) {
+    const reason = typeof item.deprecated === 'string' ? item.deprecated : '';
+    lines.push(
+      reason
+        ? `- **⚠ DEPRECATED:** ${reason}`
+        : '- **⚠ DEPRECATED:** Do not use in new code.'
+    );
+  }
+
+  if (item._ui5experimental !== undefined && item._ui5experimental !== false) {
+    const note = typeof item._ui5experimental === 'string' ? item._ui5experimental : '';
+    lines.push(
+      note
+        ? `- **🧪 EXPERIMENTAL:** ${note}`
+        : '- **🧪 EXPERIMENTAL:** API may change without notice.'
+    );
+  }
+
+  return lines;
+}
+
+function isDeprecated(item: { deprecated?: string | boolean }): boolean {
+  return item.deprecated !== undefined && item.deprecated !== false;
+}
+
+function filterDeprecated<
+  T extends { deprecated?: string | boolean },
+>(items: T[] | undefined, hide: boolean): T[] | undefined {
+  if (!items || !hide) return items;
+  return items.filter((i) => !isDeprecated(i));
+}
+
 // Helper function to format component API data
-export function formatComponentAPI(component: ComponentData): string {
+export function formatComponentAPI(
+  component: ComponentData,
+  options: FormatOptions = {}
+): string {
+  const hide = options.hideDeprecated === true;
   const sections = [`# ${component.name || component.tagName} API Reference`];
+
+  // Component-level stability markers appear right below the title so the
+  // reader (and the LLM) sees them before anything else.
+  const componentMarkers = stabilityMarkers(component);
+  if (componentMarkers.length) {
+    sections.push('\n## Stability');
+    sections.push(...componentMarkers);
+  }
 
   if (component.description) {
     sections.push(`\n## Description\n${component.description}`);
   }
 
-  if (component.attributes?.length) {
+  const attributes = filterDeprecated<ComponentAttribute>(component.attributes, hide);
+  if (attributes?.length) {
     sections.push('\n## Properties/Attributes');
-    component.attributes.forEach((attr) => {
+    attributes.forEach((attr) => {
       sections.push(`\n### ${attr.name}`);
+      sections.push(...stabilityMarkers(attr));
       if (attr.type?.text) sections.push(`- **Type:** ${attr.type.text}`);
       if (attr.description) sections.push(`- **Description:** ${attr.description}`);
       if (attr.default) sections.push(`- **Default:** ${attr.default}`);
     });
   }
 
-  if (component.slots?.length) {
+  const slots = filterDeprecated<ComponentSlot>(component.slots, hide);
+  if (slots?.length) {
     sections.push('\n## Slots');
-    component.slots.forEach((slot) => {
+    slots.forEach((slot) => {
       sections.push(`\n### ${slot.name || 'default'}`);
+      sections.push(...stabilityMarkers(slot));
       if (slot.description) sections.push(`- **Description:** ${slot.description}`);
     });
   }
 
-  if (component.events?.length) {
+  const events = filterDeprecated<ComponentEvent>(component.events, hide);
+  if (events?.length) {
     sections.push('\n## Events');
-    component.events.forEach((event) => {
+    events.forEach((event) => {
       sections.push(`\n### ${event.name}`);
+      sections.push(...stabilityMarkers(event));
       if (event.type?.text) sections.push(`- **Type:** ${event.type.text}`);
       if (event.description) sections.push(`- **Description:** ${event.description}`);
     });
   }
 
-  const publicMethods = component.members?.filter(
-    (m) => m.kind === 'method' && !m.name.startsWith('_')
+  const publicMethods = filterDeprecated<ComponentMember>(
+    component.members?.filter((m) => m.kind === 'method' && !m.name.startsWith('_')),
+    hide
   );
   if (publicMethods?.length) {
     sections.push('\n## Methods');
     publicMethods.forEach((method) => {
       sections.push(`\n### ${method.name}()`);
+      sections.push(...stabilityMarkers(method));
       if (method.type?.text) sections.push(`- **Returns:** ${method.type.text}`);
       if (method.description) sections.push(`- **Description:** ${method.description}`);
     });
@@ -133,4 +208,3 @@ export function formatComponentAPI(component: ComponentData): string {
 
   return sections.join('\n');
 }
-

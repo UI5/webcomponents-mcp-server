@@ -5,12 +5,13 @@ import { createTextResponse, handleToolError } from '../../utils.js';
 type GetComponentAPIToolPayload = {
   componentName: string;
   version?: string;
+  hideDeprecated?: boolean;
 };
 
 export const getComponentApiTool = {
   name: 'get_component_api',
   description:
-    'Get API documentation for a specific UI5 Web Component from @ui5/webcomponents, @ui5/webcomponents-fiori, @ui5/webcomponents-ai',
+    'Get API documentation for a specific UI5 Web Component from @ui5/webcomponents, @ui5/webcomponents-fiori, @ui5/webcomponents-ai. Deprecated and experimental members are surfaced with warnings so consumers can avoid them.',
   inputSchema: {
     componentName: z
       .string()
@@ -22,8 +23,19 @@ export const getComponentApiTool = {
       .describe(
         'Version of the UI5 Web Components packages (e.g., "2.12.0"). If not provided, the latest version will be used.'
       ),
+    hideDeprecated: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        'When true, deprecated attributes, slots, events and methods are filtered out entirely. Defaults to false so deprecations are visible with a warning.'
+      ),
   },
-  handler: async ({ componentName, version = 'latest' }: GetComponentAPIToolPayload) => {
+  handler: async ({
+    componentName,
+    version = 'latest',
+    hideDeprecated = false,
+  }: GetComponentAPIToolPayload) => {
     try {
       if (!/^[\da-zA-Z.\-]+$/.test(version)) {
         return createTextResponse(
@@ -48,7 +60,7 @@ export const getComponentApiTool = {
         );
       }
 
-      return createTextResponse(formatComponentAPI(componentData));
+      return createTextResponse(formatComponentAPI(componentData, { hideDeprecated }));
     } catch (error) {
       return handleToolError(error, `Error retrieving API documentation for ${componentName}`);
     }
