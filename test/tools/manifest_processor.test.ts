@@ -252,3 +252,152 @@ test('fetchCustomElementsManifest handles network errors', async (t) => {
   t.is(result, null);
 });
 
+// ---------------------------------------------------------------------------
+// Deprecated / experimental flag surfacing
+// ---------------------------------------------------------------------------
+
+// Mirrors the shape of the real @ui5/webcomponents CEM: `deprecated` is a
+// string reason on individual attributes/slots/events/members. We also cover a
+// component-level flag and the `_ui5experimental` field for future-proofing.
+const mockFlaggedComponent: ComponentData = {
+  name: 'TableRowAction',
+  tagName: 'ui5-table-row-action',
+  description: 'Row action inside a Table.',
+  attributes: [
+    {
+      name: 'interactive',
+      type: { text: 'boolean' },
+      description: 'Whether the action is interactive.',
+      deprecated: 'Set `mode="Interactive"` instead for the same functionality.',
+    },
+    {
+      name: 'text',
+      type: { text: 'string' },
+      description: 'Action label.',
+    },
+  ],
+  slots: [
+    {
+      name: 'icon',
+      description: 'Icon slot.',
+      deprecated: true,
+    },
+  ],
+  events: [
+    {
+      name: 'click',
+      type: { text: 'CustomEvent' },
+      description: 'Fired on click.',
+      _ui5experimental: 'Event payload may change.',
+    },
+  ],
+  members: [
+    {
+      name: 'focus',
+      kind: 'method',
+      type: { text: 'void' },
+      description: 'Focus the action.',
+      _ui5experimental: true,
+    },
+    {
+      name: 'oldMethod',
+      kind: 'method',
+      description: 'Legacy method.',
+      deprecated: 'Use focus() instead.',
+    },
+  ],
+};
+
+test('formatComponentAPI renders a deprecation warning with reason on attributes', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### interactive'));
+  t.true(result.includes('**⚠ DEPRECATED:**'));
+  t.true(result.includes('Set `mode="Interactive"` instead for the same functionality.'));
+});
+
+test('formatComponentAPI renders a generic deprecation marker when reason is `true`', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### icon'));
+  t.true(result.includes('**⚠ DEPRECATED:** Do not use in new code.'));
+});
+
+test('formatComponentAPI renders an experimental marker with note on events', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### click'));
+  t.true(result.includes('**🧪 EXPERIMENTAL:** Event payload may change.'));
+});
+
+test('formatComponentAPI renders a generic experimental marker when flag is `true`', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### focus()'));
+  t.true(result.includes('**🧪 EXPERIMENTAL:** API may change without notice.'));
+});
+
+test('formatComponentAPI renders deprecation warnings on methods', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### oldMethod()'));
+  t.true(result.includes('Use focus() instead.'));
+});
+
+test('formatComponentAPI renders a top-level Stability section when the whole component is flagged', (t) => {
+  const flagged: ComponentData = {
+    name: 'ExperimentalWidget',
+    tagName: 'ui5-experimental-widget',
+    description: 'Experimental widget.',
+    _ui5experimental: 'Whole component is a preview.',
+  };
+  const result = formatComponentAPI(flagged);
+  t.true(result.includes('## Stability'));
+  t.true(result.includes('Whole component is a preview.'));
+});
+
+test('formatComponentAPI hides deprecated items when hideDeprecated is true', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent, { hideDeprecated: true });
+  // Deprecated attribute, slot and method should be gone entirely.
+  t.false(result.includes('### interactive'));
+  t.false(result.includes('### icon'));
+  t.false(result.includes('### oldMethod()'));
+  // Non-deprecated members remain.
+  t.true(result.includes('### text'));
+  t.true(result.includes('### focus()'));
+});
+
+test('formatComponentAPI keeps deprecated items visible by default', (t) => {
+  const result = formatComponentAPI(mockFlaggedComponent);
+  t.true(result.includes('### interactive'));
+  t.true(result.includes('### oldMethod()'));
+});
+
+test('findComponentInManifest preserves deprecated and experimental flags', (t) => {
+  const manifest: CustomElementsManifest = {
+    modules: [
+      {
+        declarations: [
+          {
+            name: 'TableRowAction',
+            tagName: 'ui5-table-row-action',
+            description: 'Row action.',
+            attributes: [
+              {
+                name: 'interactive',
+                type: { text: 'boolean' },
+                deprecated: 'Use mode="Interactive".',
+              },
+            ],
+            events: [
+              {
+                name: 'click',
+                _ui5experimental: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const result = findComponentInManifest(manifest, 'ui5-table-row-action');
+  t.truthy(result);
+  t.is(result?.attributes?.[0].deprecated, 'Use mode="Interactive".');
+  t.is(result?.events?.[0]._ui5experimental, true);
+});
+
