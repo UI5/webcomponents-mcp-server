@@ -6,8 +6,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import anyTest, { TestFn } from 'ava';
 
-import { mountUpstream, mountUpstreams, UPSTREAMS } from '../src/upstreams/index.js';
-import { _resetForTesting } from '../src/upstreams/index.js';
+import {
+  mountUpstream,
+  mountUpstreams,
+  UPSTREAMS,
+  _resetForTesting,
+} from '../src/upstreams/index.js';
 
 const test = anyTest as TestFn;
 
@@ -238,6 +242,50 @@ test.serial('mountUpstream throws on resource URI collision across upstreams', a
       ),
     { message: /Resource URI collision/ }
   );
+
+  await a.transport.close();
+});
+
+/**
+ * Regression for the onclose-swallows-error bug: when registerUpstream throws, the catch block
+ * awaits transport.close(). The SDK's stdio transport fires `onclose` from the child's 'close'
+ * event synchronously inside that await. If onclose isn't detached first, the fail-fast handler
+ * (defaultOnUpstreamExit) would call process.exit(1) and the useful error would never reach the
+ * caller. This test drives the failing mount with an onUpstreamExit that ASSERTS if invoked,
+ * proving the mount code detached the handler before closing.
+ */
+test.serial('mountUpstream error path does not fire onUpstreamExit during cleanup', async (t) => {
+  const server = new McpServer(
+    { name: 'host', version: '0' },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } }
+  );
+
+  const a = await mountUpstream(
+    server,
+    { prefix: 'a', label: 'A', packageName: 'unused' },
+    { binPath: MOCK_BIN, onUpstreamExit: () => {} }
+  );
+
+  let onExitCalls = 0;
+  await t.throwsAsync(
+    () =>
+      mountUpstream(
+        server,
+        { prefix: 'b', label: 'B', packageName: 'unused' },
+        {
+          binPath: MOCK_BIN,
+          // If the mount layer forgets to detach onclose before transport.close(), this fires
+          // during error cleanup and (in production) would swallow the collision error via
+          // process.exit. In the test we just count calls and assert zero.
+          onUpstreamExit: () => {
+            onExitCalls++;
+          },
+        }
+      ),
+    { message: /Resource URI collision/ }
+  );
+
+  t.is(onExitCalls, 0, 'onUpstreamExit must not fire during error-path cleanup');
 
   await a.transport.close();
 });

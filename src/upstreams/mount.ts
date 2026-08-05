@@ -136,7 +136,10 @@ export async function mountUpstream(
     await client.connect(transport);
   } catch (error) {
     // Symmetric with the post-connect failure path: the spawned child must not leak even when
-    // the very first handshake fails.
+    // the very first handshake fails. Detach onclose/onerror before closing so the fail-fast
+    // handler doesn't fire during the awaited close and swallow this error via process.exit.
+    transport.onclose = undefined;
+    transport.onerror = undefined;
     try {
       await transport.close();
     } catch {
@@ -162,9 +165,14 @@ export async function mountUpstream(
   try {
     return await registerUpstream(server, spec, client, transport);
   } catch (error) {
-    // Anything failing past connect (URI collision, listTools error, registration error)
-    // leaves the child process running. Tear it down before propagating so the caller's
-    // process doesn't leak children.
+    // Anything failing past connect (URI collision, listTools error, registration error) leaves
+    // the child process running. Tear it down before propagating so the caller's process doesn't
+    // leak children. Detach onclose/onerror first: `close()` awaits the child's 'close' event,
+    // which fires this transport's onclose synchronously (SDK stdio.js) - without detachment the
+    // fail-fast handler would call process.exit(1) inside the await and this throw would never
+    // reach the caller.
+    transport.onclose = undefined;
+    transport.onerror = undefined;
     try {
       await transport.close();
     } catch {
@@ -189,14 +197,15 @@ async function registerUpstream(
   const promptNames: string[] = [];
 
   if (upstreamCaps.tools) {
-    const { tools } = await client.listTools();
+    const tools = await listAllPages((cursor) => client.listTools({ cursor }), 'tools');
     for (const tool of tools) {
-      // Naming: `<spec.prefix>_<tool.name>`. Note that an upstream may already namespace its own
-      // tools (e.g. the React MCP exports tools like `react_get_component_api`) so the user can
-      // see double-prefixed names like `react_react_get_component_api`. That's deliberate here:
-      // we don't strip a leading `<prefix>_` from the upstream's name because doing so risks
-      // collision when a future upstream genuinely exports an unprefixed tool with the same
-      // basename. A follow-up may revisit this with explicit registry-level guidance.
+      // Naming: `<spec.prefix>_<tool.name>`. Upstream tools are expected to be unprefixed
+      // (e.g. the React MCP exports `get_component_api`, `create_app`, etc.), which after
+      // prefixing yields `react_get_component_api`. If a future upstream ALREADY namespaces
+      // its own tools we'd see double-prefixed names like `react_react_<name>`; we
+      // deliberately don't strip a leading `<prefix>_` because doing so risks collision when
+      // a different upstream genuinely exports an unprefixed tool with the same basename.
+      // A follow-up may revisit this with registry-level guidance.
       const mountedName = `${spec.prefix}_${tool.name}`;
       const inputShape = jsonObjectSchemaToZodShape(tool.inputSchema);
       const config: {
@@ -228,7 +237,7 @@ async function registerUpstream(
   }
 
   if (upstreamCaps.resources) {
-    const { resources } = await client.listResources();
+    const resources = await listAllPages((cursor) => client.listResources({ cursor }), 'resources');
     for (const resource of resources) {
       const owner = resourceOwners.get(resource.uri);
       if (owner) {
@@ -259,7 +268,7 @@ async function registerUpstream(
   }
 
   if (upstreamCaps.prompts) {
-    const { prompts } = await client.listPrompts();
+    const prompts = await listAllPages((cursor) => client.listPrompts({ cursor }), 'prompts');
     for (const prompt of prompts) {
       const mountedName = `${spec.prefix}_${prompt.name}`;
       const argsShape = promptArgsToZodShape(prompt.arguments);
@@ -437,4 +446,31 @@ function promptArgsToZodShape(
 function stringifyError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+/**
+ * Drive a paginated `list*` MCP call to completion. All three list result types
+ * (tools/resources/prompts) extend `PaginatedResult` and carry an optional `nextCursor` when the
+ * server has more items than fit in one page. Callers passed a single call before this helper
+ * existed and would silently drop everything past the first page.
+ *
+ * The `key` picks the array field on each page (`tools` | `resources` | `prompts`). A bounded
+ * iteration count acts as a runaway-loop guard against a misbehaving upstream that returns the
+ * same cursor forever.
+ */
+async function listAllPages<
+  K extends string,
+  P extends { nextCursor?: string } & { [Q in K]: readonly unknown[] },
+>(fetchPage: (cursor: string | undefined) => Promise<P>, key: K): Promise<P[K]> {
+  const out: unknown[] = [];
+  let cursor: string | undefined = undefined;
+  // Cap iterations so a broken upstream can't spin forever. 1000 pages at the SDK's default
+  // page sizes covers any realistic upstream by orders of magnitude.
+  for (let i = 0; i < 1000; i++) {
+    const page = await fetchPage(cursor);
+    out.push(...page[key]);
+    if (!page.nextCursor) return out as unknown as P[K];
+    cursor = page.nextCursor;
+  }
+  throw new Error(`listAllPages(${key}): exceeded 1000 pages - upstream likely misbehaving`);
 }

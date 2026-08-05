@@ -1,15 +1,31 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'node:module';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import * as tools from './tools/index.js';
 import { markShutdown, mountUpstreams, UpstreamHandle } from './upstreams/index.js';
 
+// Read this package's version at startup so the identity advertised to MCP clients tracks
+// package.json instead of drifting (see upstreams/mount.ts for the same pattern applied to the
+// upstream-client identity). Safe '0.0.0' fallback if the lookup fails for any reason.
+const OWN_VERSION = (() => {
+  try {
+    const require = createRequire(import.meta.url);
+    // Compiled artifact lives at build/index.js, so package.json is one level up.
+    const pkg = require('../package.json') as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
 const server = new McpServer(
   {
     name: 'ui5-webcomponents',
-    version: '0.0.1',
+    version: OWN_VERSION,
   },
   {
     // Declared unconditionally: any combination of native + mounted upstream items can fill
