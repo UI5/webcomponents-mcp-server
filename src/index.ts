@@ -39,7 +39,9 @@ Object.values(tools).forEach((tool) => {
   server.tool(tool.name, tool.description, tool.inputSchema, tool.handler);
 });
 
-let handles: UpstreamHandle[] = [];
+// Populated incrementally by mountUpstreams' onHandle callback (below) so signal handlers can
+// see every child that made it past connect, even mid-startup. Never reassigned.
+const handles: UpstreamHandle[] = [];
 
 function shutdown(): void {
   // Order matters: mark shutdown BEFORE closing transports. transport.close() can fire onclose
@@ -72,7 +74,13 @@ process.on('SIGTERM', () => {
 async function main(): Promise<void> {
   // Spawn and mount upstream framework MCPs (React today; Angular/Vue future). Any failure here
   // is fatal - better the user sees a clear error than a half-mounted server.
-  handles = await mountUpstreams(server);
+  //
+  // The onHandle callback pushes each handle to the module-level `handles` array as soon as
+  // its child is connected. This exposes every spawned child to the signal handlers even
+  // during the mount window - without it, a SIGINT arriving before mountUpstreams resolves
+  // would find `handles === []` and orphan the in-flight child. We don't reassign `handles`
+  // after mountUpstreams resolves: the callback is the single source of truth for what's live.
+  await mountUpstreams(server, undefined, (h) => handles.push(h));
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

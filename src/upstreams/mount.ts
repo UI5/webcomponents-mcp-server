@@ -62,14 +62,22 @@ export function _resetForTesting(): void {
  * Spawn each registered upstream MCP server, list its tools/resources/prompts, and re-publish
  * them on `server` under namespaced names (resources keep their original URI; collisions throw).
  *
- * Throws on any failure - the caller is expected to log and exit non-zero.
+ * Throws on any failure - the caller is expected to log and exit non-zero. On partial failure
+ * (some upstreams already mounted, later one throws) every already-mounted transport is closed
+ * before the error propagates, so no child process is leaked.
+ *
+ * `onHandle` is called synchronously as each mount completes, before the next one starts. The
+ * entrypoint uses this to expose each handle to its signal handlers immediately, so a SIGINT
+ * arriving mid-`mountUpstreams` can still close every child that made it past connect. Without
+ * this callback, the caller only sees handles after the whole array resolves.
  *
  * The optional `upstreams` parameter exists for tests; production callers pass nothing and the
  * module-level `UPSTREAMS` list is used.
  */
 export async function mountUpstreams(
   server: McpServer,
-  upstreams: ReadonlyArray<UpstreamSpec> = UPSTREAMS
+  upstreams: ReadonlyArray<UpstreamSpec> = UPSTREAMS,
+  onHandle?: (handle: UpstreamHandle) => void
 ): Promise<UpstreamHandle[]> {
   // Cheap insurance against typos in the registry: two upstreams sharing a prefix would silently
   // collide on every same-named tool/prompt and behave non-deterministically. Detect at startup
@@ -85,8 +93,28 @@ export async function mountUpstreams(
   }
 
   const handles: UpstreamHandle[] = [];
-  for (const spec of upstreams) {
-    handles.push(await mountUpstream(server, spec));
+  try {
+    for (const spec of upstreams) {
+      const handle = await mountUpstream(server, spec);
+      handles.push(handle);
+      onHandle?.(handle);
+    }
+  } catch (error) {
+    // A later mount threw. Every handle collected so far owns a live child - tear them down
+    // before propagating so we don't leak orphans. Detach onclose/onerror first: close() awaits
+    // the child's 'close' event which fires this transport's onclose synchronously (SDK
+    // stdio.js), and defaultOnUpstreamExit would call process.exit(1) inside the await,
+    // swallowing the original error before it reaches the caller.
+    for (const h of handles) {
+      h.transport.onclose = undefined;
+      h.transport.onerror = undefined;
+      try {
+        await h.transport.close();
+      } catch {
+        /* best-effort */
+      }
+    }
+    throw error;
   }
   return handles;
 }
